@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ai-hawk</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#129413;</text></svg>" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="brand">
+        <span class="brand-mark">AI</span>
+        <div>
+          <h1>ai-hawk</h1>
+          <p class="brand-sub">Hawk Inform&aacute;tica</p>
+        </div>
+      </header>
+
+      <div class="field">
+        <label for="model">Modelo</label>
+        <select id="model" aria-label="Selecionar modelo"></select>
+        <p id="model-meta" class="meta"></p>
+      </div>
+
+      <div class="field">
+        <label for="system">Instru&ccedil;&atilde;o de sistema</label>
+        <textarea id="system" rows="3" placeholder="Opcional. Ex.: Responda sempre em portugu&ecirc;s, de forma objetiva."></textarea>
+      </div>
+
+      <details class="field">
+        <summary>Ajustes</summary>
+        <div class="sub-field">
+          <label for="apikey">Chave da API ai-hawk</label>
+          <input id="apikey" type="password" placeholder="deixe vazio se n&atilde;o houver auth" autocomplete="off" />
+        </div>
+        <div class="sub-field">
+          <label for="temperature">Temperatura <span id="temp-value">0.7</span></label>
+          <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
+        </div>
+        <div class="sub-field checkbox">
+          <input id="stream" type="checkbox" checked />
+          <label for="stream">Resposta em tempo real</label>
+        </div>
+      </details>
+
+      <div class="sidebar-actions">
+        <button id="new-chat" class="btn btn-ghost" type="button">Nova conversa</button>
+        <button id="reload-models" class="btn btn-ghost" type="button">Recarregar modelos</button>
+      </div>
+
+      <footer class="status">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">conectando&hellip;</span>
+      </footer>
+    </aside>
+
+    <main class="chat">
+      <div id="messages" class="messages">
+        <div class="empty-state">
+          <h2>Como posso ajudar?</h2>
+          <p>Escolha um modelo na barra lateral e comece a conversar.</p>
+        </div>
+      </div>
+
+      <form id="composer" class="composer">
+        <textarea id="input" rows="1" placeholder="Escreva sua mensagem&hellip;  (Enter envia, Shift+Enter quebra linha)"></textarea>
+        <button id="send" class="btn btn-primary" type="submit" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15.6 12 3.4 13.8z" fill="currentColor"/>
+          </svg>
+        </button>
+      </form>
+    </main>
+  </div>
+
+  <script src="/static/chat.js"></script>
+</body>
+</html>

@@ -2,11 +2,11 @@
 name = "ai-hawk"
 version = "0.1.0"
 description = "Servidor de IA multi-provedor com API compativel com OpenAI"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [tool.ruff]
 line-length = 96
-target-version = "py311"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [

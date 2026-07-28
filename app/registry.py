@@ -59,7 +59,7 @@ class Registry:
     def _build(self) -> None:
         s = self.settings
         candidates: list[ChatProvider] = [
-            # --- gratuitos ------------------------------------------------
+            # --- backends locais (custo zero: rodam na sua maquina) -------
             OpenAICompatProvider(
                 "ollama",
                 base_url=s.ollama_base_url,
@@ -70,6 +70,27 @@ class Registry:
                 default_max_output=4096,
                 timeout=s.request_timeout,
             ),
+            OpenAICompatProvider(
+                "litellm",
+                base_url=s.litellm_base_url,
+                api_key=s.litellm_api_key,
+                tier="free",
+                discover=True,
+                requires_key=False,
+                default_max_output=8192,
+                timeout=s.request_timeout,
+            ),
+            OpenAICompatProvider(
+                "llamacpp",
+                base_url=s.llamacpp_base_url,
+                api_key=s.llamacpp_api_key,
+                tier="free",
+                discover=True,
+                requires_key=False,
+                default_max_output=8192,
+                timeout=s.request_timeout,
+            ),
+            # --- free tiers na nuvem --------------------------------------
             OpenAICompatProvider(
                 "groq",
                 base_url="https://api.groq.com/openai/v1",

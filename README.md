@@ -22,6 +22,7 @@ Enquanto ele estiver ativo:
 | Provedor | Custo | O que precisa |
 |---|---|---|
 | **Ollama** | zero absoluto | roda na sua máquina, sem chave nenhuma |
+| **Backend local** | zero absoluto | litellm, llama.cpp, vLLM, LM Studio — qualquer um que fale o dialeto OpenAI |
 | **Groq** | free tier | chave gratuita, sem cartão |
 | **OpenRouter** | free tier | só modelos com sufixo `:free` são expostos |
 | **Cerebras** | free tier | chave gratuita |

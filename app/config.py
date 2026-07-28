@@ -32,8 +32,16 @@ class Settings(BaseSettings):
     # --- Guarda de custo --------------------------------------------------
     allow_paid_models: bool = False
 
-    # --- Provedores gratuitos --------------------------------------------
+    # --- Backends locais auto-hospedados (sempre gratuitos) ---------------
+    # Qualquer servico que fale o dialeto OpenAI: llama.cpp, vLLM, LM Studio,
+    # litellm, text-generation-webui. Rodam na sua maquina, custo zero.
     ollama_base_url: str = "http://localhost:11434/v1"
+    litellm_base_url: str = ""
+    litellm_api_key: str = ""
+    llamacpp_base_url: str = ""
+    llamacpp_api_key: str = ""
+
+    # --- Provedores gratuitos na nuvem (free tier) -----------------------
     groq_api_key: str = ""
     openrouter_api_key: str = ""
     cerebras_api_key: str = ""

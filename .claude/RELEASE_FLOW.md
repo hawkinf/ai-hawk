@@ -105,6 +105,23 @@ Rollback: restaure o `.bak-*` e dê reload de novo.
 > **`proxy_buffering off` é obrigatório** nas rotas de API. Sem isso o nginx
 > segura a resposta inteira e o streaming SSE chega de uma vez só.
 
+### Cache de CDN — armadilha já vivida
+
+O Cloudflare cacheou o `chat.js` e continuou servindo a versão antiga depois de
+um deploy (`cf-cache: HIT`), fazendo a correção publicada simplesmente não
+chegar ao navegador. Duas defesas, ambas já no lugar:
+
+- O HTML sai com `Cache-Control: no-store` (na aplicação **e** no nginx).
+- As URLs dos assets levam `?v=<hash do conteúdo>`, calculado no start.
+  Mudou o arquivo, muda a URL — nenhum cache intermediário consegue servir
+  versão velha, e não existe bump manual de versão para esquecer.
+
+Para conferir após um deploy:
+
+```bash
+curl -sI https://ia.hawk.com.br/ai-hawk/ | grep -i "cache-control\|cf-cache"
+```
+
 ## Rollback
 
 ```bash

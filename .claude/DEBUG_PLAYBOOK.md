@@ -83,6 +83,45 @@ Os 10 modelos aparecem no catálogo, mas **não estão todos utilizáveis ao mes
 tempo**. Alternar entre famílias custa ~2 min, e voltar do Ollama exige a
 intervenção acima.
 
+## 502 no proxy para um serviço do stack (host ai-hawk)
+
+O container está `Up (healthy)` e responde na porta interna, mas o nginx devolve
+502 e o log mostra `Host is unreachable` para um IP `172.18.0.x`.
+
+**Causa:** o container foi recriado **sem** `--network ai-hawk-net` e nasceu
+isolado na rede `bridge`. O nginx resolve os upstreams por nome dentro da
+`ai-hawk-net` — de fora dela, nem o DNS resolve (`SERVFAIL`).
+
+Diagnóstico:
+
+```bash
+docker inspect <container> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+docker exec ai-hawk-proxy sh -c 'wget -qO- http://<container>:8080/health'
+```
+
+Correção (aditiva, não recria o container):
+
+```bash
+docker network connect ai-hawk-net <container>
+docker exec ai-hawk-proxy nginx -s reload   # re-resolve o IP
+```
+
+A conexão de rede persiste entre restarts do container. **Só se perde se ele
+for recriado** (`docker rm` + `docker run`) sem a flag — sempre inclua
+`--network ai-hawk-net` no comando de criação.
+
+Conferir se alguém ficou de fora:
+
+```bash
+for c in $(docker ps --format '{{.Names}}'); do
+  docker inspect $c --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' \
+    | grep -q ai-hawk-net || echo "FORA: $c"
+done
+```
+
+> `gemma4cuda` fica fora da rede **de propósito**: o nginx fala com ele pelo
+> gateway do host (`172.18.0.1:8090/8191`), não por nome de container.
+
 ## Resposta vazia com `finish_reason: "length"`
 
 `gemma4` e os `qwen3-*-thinking` são modelos de raciocínio: gastam o orçamento

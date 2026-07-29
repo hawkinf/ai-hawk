@@ -71,6 +71,37 @@ def test_nome_de_backend_invalido_e_rejeitado():
         LocalBackend(name="", base_url="http://x/v1")
 
 
+@pytest.mark.parametrize(
+    ("upstream", "esperado"),
+    [
+        (400, 400),  # erro do cliente: repassa
+        (401, 401),
+        (429, 429),  # rate limit: o cliente precisa saber para recuar
+        (500, 502),  # erro interno do upstream: vira bad gateway
+        (503, 503),  # "tente de novo": PRECISA sobreviver
+        (504, 504),  # "demorou demais": idem
+        (502, 502),
+    ],
+)
+def test_status_do_upstream_preserva_o_que_e_acionavel(upstream, esperado):
+    """Um 503 do backend virar 502 faz o cliente achar que o gateway quebrou.
+
+    Caso real: o gateway da GPU responde 503 quando outro modelo esta
+    carregado - a acao certa e tentar de novo, nao investigar o gateway.
+    """
+    import httpx
+
+    from app.providers.openai_compat import OpenAICompatProvider
+
+    p = OpenAICompatProvider("x", base_url="http://x/v1", api_key="k")
+    exc = httpx.HTTPStatusError(
+        "erro",
+        request=httpx.Request("POST", "http://x/v1/chat/completions"),
+        response=httpx.Response(upstream, json={"error": {"message": "ocupado"}}),
+    )
+    assert p._fail(exc).status == esperado
+
+
 def test_backend_sem_url_fica_desativado(monkeypatch):
     s = _settings(
         monkeypatch,

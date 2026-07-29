@@ -92,8 +92,10 @@ class OpenAICompatProvider(ChatProvider):
         if isinstance(exc, httpx.HTTPStatusError):
             status = exc.response.status_code
             detail = _extract_error(exc.response)
-            # Repassa 4xx do upstream; colapsa 5xx em 502.
-            out = status if 400 <= status < 500 else 502
+            # Repassa 4xx e os 5xx que carregam significado para o cliente:
+            # 503 = tente de novo em instantes, 504 = demorou demais. Colapsar
+            # esses em 502 faria o cliente achar que o gateway esta quebrado.
+            out = status if (400 <= status < 500 or status in (503, 504)) else 502
             return ProviderError(self.name, f"[{self.name}] {detail}", out)
         if isinstance(exc, httpx.ConnectError):
             return ProviderError(

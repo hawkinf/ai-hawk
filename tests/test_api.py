@@ -39,6 +39,21 @@ def test_ui_usa_caminhos_relativos(client):
     assert 'fetch("/v1/' not in js
 
 
+def test_ui_orienta_o_usuario_no_401(client):
+    """Um 401 precisa dizer o que fazer, nao so mostrar o codigo HTTP.
+
+    O corpo de um 401 pode vir do proxy em HTML (nao JSON), entao o
+    tratamento tem que ser por status, nao por parse do corpo.
+    """
+    js = client.get("/static/chat.js").text
+    assert "res.status === 401" in js
+    assert "pedirChave" in js
+    assert "Ajustes" in js
+    # Precisa abrir os Ajustes e focar o campo, senao a chave fica escondida.
+    assert "ajustes.open = true" in js
+    assert "el.apikey.focus()" in js
+
+
 # --- catalogo --------------------------------------------------------------
 
 

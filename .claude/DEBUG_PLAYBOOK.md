@@ -61,6 +61,22 @@ Os 4 backends são exclusivos entre si — `systemctl` mostra qual está de pé:
 for u in ollama gemma4 qwen3coder gemma3ab; do printf "%-12s %s\n" "$u" "$(systemctl is-active $u)"; done
 ```
 
+### Autostart do Ollama (corrigido em 2026-07-29)
+
+O `ollama.service` vinha `enabled` — subia sozinho no boot. Combinado com o
+polling do open-webui, isso fixava a GPU logo na inicialização e **nenhum modelo
+llama.cpp conseguia carregar** depois de um reboot.
+
+Foi desabilitado (`systemctl disable ollama`), ficando igual aos outros três
+backends. Todos agora sobem sob demanda, via `ensure()` do swap proxy — que tem
+permissão para isso no `/etc/sudoers.d/hawksvc`. Estado correto:
+
+```
+ollama disabled | gemma4 disabled | qwen3coder disabled | gemma3ab disabled
+```
+
+Se algum voltar a `enabled`, a armadilha de reboot volta junto.
+
 ### Armadilha: o Ollama não libera a GPU sozinho
 
 Um container do stack faz *polling* contínuo no gateway do Ollama. Enquanto o
@@ -109,6 +125,13 @@ docker exec ai-hawk-proxy nginx -s reload   # re-resolve o IP
 A conexão de rede persiste entre restarts do container. **Só se perde se ele
 for recriado** (`docker rm` + `docker run`) sem a flag — sempre inclua
 `--network ai-hawk-net` no comando de criação.
+
+Para o open-webui existe um script com o comando correto (preserva o volume
+de dados: contas, chats e configurações):
+
+```bash
+sudo /opt/hawk/recreate-open-webui.sh
+```
 
 Conferir se alguém ficou de fora:
 

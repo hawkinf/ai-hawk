@@ -6,6 +6,7 @@ por cima de varios provedores de LLM, mais uma interface de chat em /.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import uuid
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
@@ -248,11 +249,29 @@ async def _sse(provider, body: ChatCompletionRequest, spec) -> AsyncIterator[str
 # Interface web (montada por ultimo para nao capturar as rotas acima)
 # ---------------------------------------------------------------------------
 
+def _asset_version() -> str:
+    """Hash curto do conteudo dos assets, usado para invalidar cache de CDN.
+
+    Sem isso, um proxy/CDN na frente do servidor continua servindo o JS antigo
+    depois de um deploy, e a interface quebra de forma silenciosa.
+    """
+    digest = hashlib.sha256()
+    for nome in sorted(("chat.js", "style.css")):
+        caminho = WEB_DIR / nome
+        if caminho.is_file():
+            digest.update(caminho.read_bytes())
+    return digest.hexdigest()[:12]
+
+
 if WEB_DIR.is_dir():
+    _INDEX = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace(
+        "__ASSET_V__", _asset_version()
+    )
 
     @app.get("/", include_in_schema=False)
-    async def index() -> FileResponse:
-        return FileResponse(WEB_DIR / "index.html")
+    async def index() -> HTMLResponse:
+        # no-store no HTML: e ele que aponta para a versao atual dos assets.
+        return HTMLResponse(_INDEX, headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 

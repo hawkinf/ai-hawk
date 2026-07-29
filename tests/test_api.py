@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from tests.conftest import FREE_MODEL, PAID_MODEL
 
@@ -29,14 +30,30 @@ def test_ui_usa_caminhos_relativos(client):
     pediria /static/... em vez de /ai-hawk/static/...
     """
     html = client.get("/").text
-    assert 'href="static/style.css"' in html
-    assert 'src="static/chat.js"' in html
+    assert 'href="static/style.css?v=' in html
+    assert 'src="static/chat.js?v=' in html
     assert 'href="/static/' not in html
     assert 'src="/static/' not in html
 
     js = client.get("/static/chat.js").text
     assert "document.baseURI" in js
     assert 'fetch("/v1/' not in js
+
+
+def test_assets_tem_versao_e_html_nao_e_cacheado(client):
+    """Sem isso, um CDN na frente serve JS velho depois do deploy.
+
+    Aconteceu em producao: o Cloudflare manteve o chat.js antigo e a correcao
+    publicada nao chegou ao navegador.
+    """
+    res = client.get("/")
+    assert res.headers["cache-control"] == "no-store"
+    assert "__ASSET_V__" not in res.text  # token precisa ter sido substituido
+
+    versoes = re.findall(r"static/\w+\.\w+\?v=([0-9a-f]+)", res.text)
+    assert len(versoes) == 2
+    assert len(set(versoes)) == 1  # mesma versao para todos os assets
+    assert len(versoes[0]) == 12
 
 
 def test_ui_orienta_o_usuario_no_401(client):

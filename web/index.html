@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ai-hawk</title>
   <!-- Caminhos relativos: a interface funciona na raiz (/) ou sob um prefixo
-       de proxy reverso (/ai-hawk/) sem alteracao. -->
-  <link rel="stylesheet" href="static/style.css" />
+       de proxy reverso (/ai-hawk/) sem alteracao.
+       __ASSET_V__ e trocado em tempo de execucao por um hash do conteudo dos
+       assets: muda o arquivo, muda a URL, e nenhum CDN serve versao velha. -->
+  <link rel="stylesheet" href="static/style.css?v=__ASSET_V__" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#129413;</text></svg>" />
 </head>
 <body>
@@ -77,6 +79,6 @@
     </main>
   </div>
 
-  <script src="static/chat.js"></script>
+  <script src="static/chat.js?v=__ASSET_V__"></script>
 </body>
 </html>

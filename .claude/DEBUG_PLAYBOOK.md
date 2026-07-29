@@ -47,6 +47,50 @@ o serviço não está rodando na porta 11434.
 
 ---
 
+## HTTP 503 `gpu_busy` — host ai-hawk
+
+> `⚠️ Não é possível carregar este modelo agora: outra pessoa está usando a GPU`
+
+**Não é bug.** A RTX 3060 tem 12 GB e só cabe **um modelo grande por vez**. O
+`hawk_swap_proxy.py` descarrega um backend para carregar outro; a troca leva
+**~2 minutos**. A janela de "em uso" é `ACTIVE_WINDOW = 150s` sem requisições.
+
+Os 4 backends são exclusivos entre si — `systemctl` mostra qual está de pé:
+
+```bash
+for u in ollama gemma4 qwen3coder gemma3ab; do printf "%-12s %s\n" "$u" "$(systemctl is-active $u)"; done
+```
+
+### Armadilha: o Ollama não libera a GPU sozinho
+
+Um container do stack faz *polling* contínuo no gateway do Ollama. Enquanto o
+Ollama estiver carregado, esse polling renova o "em uso" a cada ciclo e a janela
+de 150s **nunca expira** — então o swap de volta para `gemma4` não acontece
+sozinho. Sintoma: todo modelo llama.cpp passa a responder 503 indefinidamente.
+
+Restaurar manualmente:
+
+```bash
+sudo systemctl stop ollama && sleep 3 && sudo systemctl start gemma4
+```
+
+O sentido inverso (`gemma4` → Ollama) funciona normalmente, porque ninguém faz
+polling no gemma.
+
+### Consequência prática
+
+Os 10 modelos aparecem no catálogo, mas **não estão todos utilizáveis ao mesmo
+tempo**. Alternar entre famílias custa ~2 min, e voltar do Ollama exige a
+intervenção acima.
+
+## Resposta vazia com `finish_reason: "length"`
+
+`gemma4` e os `qwen3-*-thinking` são modelos de raciocínio: gastam o orçamento
+de saída pensando antes de escrever. Com `max_tokens` baixo, todo o orçamento vai
+para o raciocínio e o texto final sai vazio. Use `max_tokens` ≥ 2000.
+
+---
+
 ## Streaming corta no meio
 
 O erro **não** aparece no status HTTP (já foi 200). Ele é emitido como um evento

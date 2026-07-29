@@ -4,7 +4,23 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class LocalBackend(BaseModel):
+    """Servico local que fala o dialeto OpenAI.
+
+    Cobre litellm, llama.cpp --server, vLLM, LM Studio, gateways proprios.
+    Sempre tratado como gratuito: roda na sua propria maquina.
+
+    `name` vira o prefixo do id do modelo (ex.: name="hawk" -> "hawk/gemma4"),
+    entao escolha algo curto e descritivo.
+    """
+
+    name: str = Field(min_length=1, max_length=32, pattern=r"^[a-z0-9_-]+$")
+    base_url: str
+    api_key: str = ""
 
 
 class Settings(BaseSettings):
@@ -33,13 +49,11 @@ class Settings(BaseSettings):
     allow_paid_models: bool = False
 
     # --- Backends locais auto-hospedados (sempre gratuitos) ---------------
-    # Qualquer servico que fale o dialeto OpenAI: llama.cpp, vLLM, LM Studio,
-    # litellm, text-generation-webui. Rodam na sua maquina, custo zero.
     ollama_base_url: str = "http://localhost:11434/v1"
-    litellm_base_url: str = ""
-    litellm_api_key: str = ""
-    llamacpp_base_url: str = ""
-    llamacpp_api_key: str = ""
+
+    # Lista JSON de servicos locais OpenAI-compat. Exemplo no .env:
+    #   LOCAL_BACKENDS=[{"name":"hawk","base_url":"http://127.0.0.1:8096/v1","api_key":"..."}]
+    local_backends: list[LocalBackend] = []
 
     # --- Provedores gratuitos na nuvem (free tier) -----------------------
     groq_api_key: str = ""

@@ -70,25 +70,18 @@ class Registry:
                 default_max_output=4096,
                 timeout=s.request_timeout,
             ),
-            OpenAICompatProvider(
-                "litellm",
-                base_url=s.litellm_base_url,
-                api_key=s.litellm_api_key,
-                tier="free",
-                discover=True,
-                requires_key=False,
-                default_max_output=8192,
-                timeout=s.request_timeout,
-            ),
-            OpenAICompatProvider(
-                "llamacpp",
-                base_url=s.llamacpp_base_url,
-                api_key=s.llamacpp_api_key,
-                tier="free",
-                discover=True,
-                requires_key=False,
-                default_max_output=8192,
-                timeout=s.request_timeout,
+            *(
+                OpenAICompatProvider(
+                    b.name,
+                    base_url=b.base_url,
+                    api_key=b.api_key,
+                    tier="free",
+                    discover=True,
+                    requires_key=False,
+                    default_max_output=8192,
+                    timeout=s.request_timeout,
+                )
+                for b in s.local_backends
             ),
             # --- free tiers na nuvem --------------------------------------
             OpenAICompatProvider(
@@ -158,6 +151,13 @@ class Registry:
         for provider in candidates:
             if not provider.enabled:
                 log.info("Provedor '%s' desativado (sem configuracao).", provider.name)
+                continue
+            if provider.name in self.providers:
+                log.error(
+                    "Nome de provedor duplicado: '%s'. Renomeie o backend em "
+                    "LOCAL_BACKENDS - este esta sendo ignorado.",
+                    provider.name,
+                )
                 continue
             self.providers[provider.name] = provider
             if provider.tier == "paid" and not s.allow_paid_models:

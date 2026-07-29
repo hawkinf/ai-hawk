@@ -22,6 +22,23 @@ def test_ui_e_servida_na_raiz(client):
     assert "ai-hawk" in res.text
 
 
+def test_ui_usa_caminhos_relativos(client):
+    """A UI precisa funcionar sob prefixo de proxy reverso (ex.: /ai-hawk/).
+
+    Caminho absoluto em asset quebra o deploy atras de proxy: o navegador
+    pediria /static/... em vez de /ai-hawk/static/...
+    """
+    html = client.get("/").text
+    assert 'href="static/style.css"' in html
+    assert 'src="static/chat.js"' in html
+    assert 'href="/static/' not in html
+    assert 'src="/static/' not in html
+
+    js = client.get("/static/chat.js").text
+    assert "document.baseURI" in js
+    assert 'fetch("/v1/' not in js
+
+
 # --- catalogo --------------------------------------------------------------
 
 

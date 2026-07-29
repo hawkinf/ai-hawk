@@ -18,7 +18,8 @@
 | Caminho | `/opt/ai-hawk-server` |
 | Serviço | `ai-hawk-server.service` (systemd, habilitado no boot) |
 | Porta | `8081`, liberada no UFW **só** para `192.168.200.0/24` |
-| URL | `http://192.168.200.5:8081` |
+| URL (LAN) | `http://192.168.200.5:8081` |
+| URL (público) | `https://ia.hawk.com.br/ai-hawk/` |
 | Backend | `litellm` em `127.0.0.1:4000` → modelos locais na RTX 3060 |
 | Guarda de custo | **ativa** (`ALLOW_PAID_MODELS=false`) |
 | Autenticação | ativa (`HAWK_API_KEYS` preenchido) |
@@ -55,22 +56,54 @@ curl -s http://192.168.200.5:8081/health
 ssh -o RemoteCommand=none -o RequestTTY=no ai-hawk 'sudo journalctl -u ai-hawk-server -f'
 ```
 
-## Expor em domínio (ainda não feito)
+## Acesso público — `https://ia.hawk.com.br/ai-hawk/`
 
-O proxy existente já atende `ai.hawk.com.br` e `ia.hawk.com.br` via cloudflared.
-Para publicar o ai-hawk-server ali, seria preciso editar
-`/opt/ai-hawk-proxy/nginx.conf` — arquivo de produção, mexer com cuidado.
-O bloco necessário:
+| Rota | Auth na borda | Destino |
+|---|---|---|
+| `/ai-hawk/` | não (é só a UI) | `172.18.0.1:8081/` |
+| `/ai-hawk/v1/…` | **sim** (`Authorization` obrigatório) | `172.18.0.1:8081/v1/` |
+| `/ai-hawk` | — | 301 para `/ai-hawk/` |
 
-```nginx
-location /ai-hawk/ {
-    proxy_pass http://192.168.200.5:8081/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_buffering off;          # obrigatorio para SSE, senao o streaming trava
-    proxy_read_timeout 600s;
-}
+Duas camadas: o nginx exige a *presença* do header `Authorization` nas rotas de
+API, e o ai-hawk-server valida a chave de fato contra `HAWK_API_KEYS`.
+
+### Qual domínio passa pelo proxy
+
+O túnel Cloudflare roteia de forma diferente — confira antes de mexer:
+
+| Domínio | Vai para |
+|---|---|
+| `ai.hawk.com.br` | **direto ao open-webui**, não passa pelo nginx |
+| `ia.hawk.com.br` | `ai-hawk-proxy:80` → nginx |
+
+Editar o bloco `ai.hawk.com.br` do nginx **não afeta tráfego público** — ele só
+atende a LAN (`192.168.200.5`, `ai-hawk.local`).
+
+### Regras de firewall necessárias
+
+A porta 8081 precisa de duas regras: LAN (acesso direto) e Docker (o container
+nginx alcança o host por `172.18.0.1`).
+
+```bash
+sudo ufw allow from 192.168.200.0/24 to any port 8081 proto tcp
+sudo ufw allow from 172.16.0.0/12   to any port 8081 proto tcp
 ```
+
+### Mexer no nginx com segurança
+
+`/opt/ai-hawk-proxy/nginx.conf` é produção com túnel ativo. Sempre nesta ordem:
+
+```bash
+sudo cp -p /opt/ai-hawk-proxy/nginx.conf /opt/ai-hawk-proxy/nginx.conf.bak-$(date +%Y%m%d_%H%M%S)
+# editar...
+docker exec ai-hawk-proxy nginx -t        # valida SEM aplicar
+docker exec ai-hawk-proxy nginx -s reload # reload, nao restart
+```
+
+Rollback: restaure o `.bak-*` e dê reload de novo.
+
+> **`proxy_buffering off` é obrigatório** nas rotas de API. Sem isso o nginx
+> segura a resposta inteira e o streaming SSE chega de uma vez só.
 
 ## Rollback
 

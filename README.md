@@ -100,6 +100,11 @@ em `localhost`. Antes de expor o servidor na VPS, preencha.
 
 ## Usando a API nos seus programas
 
+> **Vai integrar um programa seu? Comece por [INTEGRACAO.md](INTEGRACAO.md)** —
+> guia completo com as três regras que evitam a maioria dos problemas
+> (`max_tokens`, timeout e o `503` da fila da GPU), códigos de erro e clientes
+> prontos em Python, C# e Dart.
+
 Como o formato é o da OpenAI, use o SDK que você já conhece apontando a
 `base_url` para o ai-hawk. Exemplos completos em [`examples/`](examples/).
 

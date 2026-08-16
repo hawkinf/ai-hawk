@@ -1,6 +1,6 @@
 [project]
 name = "ai-hawk"
-version = "0.3.1"
+version = "0.3.2"
 description = "Servidor de IA multi-provedor com API compativel com OpenAI"
 requires-python = ">=3.10"
 

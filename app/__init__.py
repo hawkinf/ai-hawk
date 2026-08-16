@@ -1,3 +1,3 @@
 """ai-hawk - servidor de IA multi-provedor com API compativel com OpenAI."""
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"

@@ -25,9 +25,11 @@ GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 # Catalogo estatico do Google. Flash tem free tier generoso no AI Studio;
 # Pro fica marcado como pago por precaucao (guarda de custo bloqueia).
-# Lista conferida em 2026-08-16 contra o /v1beta/models da propria chave: o
-# `gemini-2.0-flash` que estava aqui nao existe mais e daria 404.
-#
+# Lista conferida em 2026-08-16 chamando CADA modelo pelo endpoint que o ai-hawk
+# usa de verdade (dialeto OpenAI). Nao basta olhar o /v1beta/models: o
+# `gemini-2.5-flash` e o `-flash-lite` aparecem la e devolvem 404 aqui - enquanto
+# o `gemini-2.5-pro`, da mesma familia, responde normal. O `gemini-2.0-flash` que
+# estava nesta lista tambem ja nao existe.
 # A familia Flash tem cota gratuita. A Pro fica marcada como "paid" DE PROPOSITO,
 # mesmo tendo free tier documentado: modelo bloqueado por engano devolve um 402
 # claro e se corrige numa linha; modelo pago liberado por engano vira fatura.
@@ -37,8 +39,6 @@ _GOOGLE_MODELS = [
     ("gemini-3.5-flash", "Gemini 3.5 Flash", "free", 1_000_000),
     ("gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite", "free", 1_000_000),
     ("gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite", "free", 1_000_000),
-    ("gemini-2.5-flash", "Gemini 2.5 Flash", "free", 1_000_000),
-    ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "free", 1_000_000),
     ("gemini-2.5-pro", "Gemini 2.5 Pro", "paid", 1_000_000),
     ("gemini-3.1-pro-preview", "Gemini 3.1 Pro Preview", "paid", 1_000_000),
 ]

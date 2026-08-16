@@ -192,6 +192,76 @@ curl -s -o /dev/null -w "%{http_code}
 " http://192.168.200.5:8081/v1/models -H "Authorization: Bearer $CHAVE"
 ```
 
+### `apt upgrade` de biblioteca NVIDIA derruba TODO container de GPU
+
+Sintoma: `systemctl start <backend>` fica em `activating`, o container nao
+existe, a GPU esta vazia e o journal repete:
+
+```
+failed to fulfil mount request: open /usr/lib/x86_64-linux-gnu/libnvidia-egl-wayland.so.1.1.9: no such file or directory
+```
+
+Causa: `/var/run/cdi/nvidia.yaml` (especificacao CDI do runtime NVIDIA) fixa o
+**caminho exato** de cada biblioteca do driver. Quando o `apt` atualiza uma
+delas, a especificacao aponta para um arquivo que nao existe mais.
+
+O que engana: **quem ja estava rodando continua funcionando** (a biblioteca
+antiga esta montada no container vivo). A falha so aparece no proximo start -
+que pode ser horas depois, quando o swap trocar de modelo. Aconteceu em
+2026-08-16: o `apt` do instalador do Hermes Agent subiu `libnvidia-egl-wayland1`
+de 1.1.9 para 1.1.21 as 19:52, e o stack so quebrou as 20:13.
+
+Conserto:
+
+```bash
+sudo nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
+```
+
+Confirme que a versao velha sumiu antes de reiniciar o backend:
+
+```bash
+sudo grep -c "1\.1\.9" /var/run/cdi/nvidia.yaml
+```
+
+`/var/run` e tmpfs e a especificacao e regerada no boot, entao **um reboot
+tambem resolve** - o comando acima so faz o que o boot faria. Depois de
+qualquer `apt upgrade` que toque em pacote `nvidia-*`, suba um container de
+GPU para conferir, em vez de descobrir no proximo swap.
+
+### Diagnostico apressado: 503 do swap nem sempre e lentidao de carga
+
+Um `gpu_busy`/`indisponivel` depois de ~75s parece o laco de espera do
+`ensure()` sendo curto demais. Foi o que pareceu em 2026-08-16 - e era o
+container morrendo e reiniciando em laco pelo problema de CDI acima. A carga
+real do mesmo modelo eram **7 segundos**.
+
+Antes de mexer no timeout, olhe o journal do backend:
+
+```bash
+sudo journalctl -u qwen3coder -n 20 --no-pager
+```
+
+`restart counter is at N` com N alto significa laco de crash, nao carga lenta.
+
+### Painel do Hermes Agent (`hermes-dashboard.service`)
+
+Servico separado do ai-hawk, instalado no usuario `hawk` (nao root), codigo em
+`~/.hermes`. Ouve em `0.0.0.0:9119` com o UFW liberando **so**
+`192.168.200.0/24`, e exige senha (`HERMES_DASHBOARD_BASIC_AUTH_*` no
+`~/.hermes/.env`, modo 600).
+
+Apesar do nome, **nao e HTTP Basic**: e login por formulario com sessao. Testar
+com `curl -u usuario:senha` devolve 401 mesmo com a senha certa e nao prova
+nada. A rota real e:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}
+" -X POST http://127.0.0.1:9119/auth/password-login -H "Content-Type: application/json" -d '{"provider":"basic","username":"...","password":"..."}'
+```
+
+200 = credencial boa, 401 = ruim. **Nunca imprima o corpo da resposta**: um 422
+por campo faltando ecoa a senha enviada em texto claro.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

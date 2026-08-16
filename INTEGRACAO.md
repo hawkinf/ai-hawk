@@ -53,7 +53,7 @@ Modelos atuais (todos rodam local, custo zero):
 
 | `model` | Bom para |
 |---|---|
-| `hawk/gemma4` | uso geral, raciocínio — **é o que fica carregado por padrão** |
+| `hawk/gemma4` | uso geral, raciocínio — o mais rápido dos grandes |
 | `hawk/qwen3coder` | código |
 | `hawk/gemma3ab` | uso geral, sem restrições de conteúdo |
 | `hawk/qwen38` | 27B de raciocínio — mais capaz, porém **~7 tokens/s** (não cabe inteiro na GPU) |
@@ -64,6 +64,10 @@ Modelos atuais (todos rodam local, custo zero):
 | `hawk/hf.co/mradermacher/Foundation-Sec-8B-Instruct-GGUF:Q4_K_M` | segurança da informação |
 | `hawk/hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q4_K_M` | segurança ofensiva |
 | `litellm/bge-m3` | **embeddings** (busca semântica), não conversa |
+
+> **Só um modelo grande fica carregado por vez** (a GPU tem 12 GB). Quem
+> está residente é simplesmente o último que alguém pediu; trocar custa uma
+> carga a mais no primeiro pedido. Não presuma qual está de pé.
 
 Os ids têm a forma `provedor/modelo`. Se o nome for único no catálogo, o nome
 sozinho também funciona (`gemma4`).

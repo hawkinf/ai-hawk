@@ -126,6 +126,45 @@ Desempenho resultante: **6,9 tokens/s** na geração, 29 tokens/s lendo o prompt
 É o preço de manter ~25% das camadas na CPU — utilizável, não rápido. Por ser
 modelo de raciocínio, vale a regra do `max_tokens` >= 2000.
 
+Carga fria **medida** (com `echo 3 > /proc/sys/vm/drop_caches` e todos os
+backends parados): **20s** do pedido à resposta, lendo os 15,7 GB do disco. Ou
+seja, os 75s que o `ensure()` espera pelo health sobram — não há o que ajustar
+ali. Meça antes de mexer.
+
+### Armadilha: `Up (unhealthy)` que não é problema nenhum
+
+A imagem `llama.cpp:server-cuda` traz um `HEALTHCHECK` embutido que consulta
+`localhost:8080`. Como cada backend do stack escuta numa porta própria (8090,
+8092, 8094, 8098), o teste embutido falha sempre e o `docker ps` mostra
+`Up (unhealthy)` com o modelo respondendo perfeitamente.
+
+Confirme antes de investigar — se isto responde, está tudo bem:
+
+```bash
+curl -s http://127.0.0.1:8098/health
+```
+
+A correção é a unit declarar a sua própria checagem, como o `gemma4` já fazia:
+
+```
+--health-cmd "curl -sf http://localhost:8098/health || exit 1"
+--health-interval 30s --health-start-period 300s
+```
+
+Aplicado em `qwen38`, `qwen3coder` e `gemma3ab` em 2026-08-16.
+
+### Mapa de portas dos backends
+
+| backend | container | porteiro no swap |
+|---|---|---|
+| ollama | 11434 | 11435 |
+| gemma4 | 8090 | 8091 |
+| qwen3coder | 8092 | 8093 |
+| gemma3ab | 8094 | 8095 |
+| qwen38 | 8098 | 8099 |
+
+**8096 é o endpoint unificado**, não sobra para backend novo.
+
 ### Armadilha: `llama-cli` manual segura a GPU para sempre
 
 Um teste solto com `/root/llama.cpp/llama-cli -p "..." -n 64` **não termina**: o

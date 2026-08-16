@@ -75,10 +75,12 @@ sozinho também funciona (`gemma4`).
 
 ## Ferramentas (function calling)
 
-A partir da versao 0.2.0 os campos `tools` e `tool_choice` sao repassados ao
-modelo, e `tool_calls` volta na resposta - entao SDKs e agentes funcionam.
-Duas condicoes: use `stream: false` (streaming com ferramenta ainda nao e
-suportado) e `max_tokens` >= 2000, como em qualquer chamada.
+A partir da versao 0.3.0 os campos `tools` e `tool_choice` sao repassados ao
+modelo e `tool_calls` volta na resposta, **com ou sem streaming**. SDKs da
+OpenAI e agentes (Hermes, OpenClaw) funcionam apontando so a `base_url`.
+
+Vale a regra de sempre: `max_tokens` >= 2000. Os modelos de raciocinio gastam
+orcamento pensando antes de decidir qual ferramenta chamar.
 
 ## 3. As três regras que evitam 90% dos problemas
 

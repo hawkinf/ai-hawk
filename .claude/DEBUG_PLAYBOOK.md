@@ -262,6 +262,39 @@ curl -s -o /dev/null -w "%{http_code}
 200 = credencial boa, 401 = ruim. **Nunca imprima o corpo da resposta**: um 422
 por campo faltando ecoa a senha enviada em texto claro.
 
+### Agente diz "empty content after retries" e o modelo parece burro
+
+Sintoma: o cliente (Hermes, OpenClaw, qualquer laco de agente) responde
+`No reply: the model returned empty content after retries`, ou o modelo escreve
+a chamada de ferramenta como TEXTO cru:
+
+```
+<|tool_call>call:terminal_command{command: "ls"}<tool_call|>
+```
+
+Parece limitacao do modelo. Nao e - foram **dois** bugs do ai-hawk, os dois
+corrigidos em 2026-08-16:
+
+1. Ate a 0.1.0 o campo `tools` nao existia no schema e o Pydantic o descartava
+   calado. O modelo nunca soube que havia ferramenta.
+2. Ate a 0.2.0 o streaming so repassava deltas de texto. Como praticamente todo
+   cliente streama por padrao, `tool_calls` sumia no caminho e chegava vazio.
+
+Antes de culpar o modelo, repita **sem streaming**:
+
+```bash
+curl -s http://127.0.0.1:8081/v1/chat/completions -H "Authorization: Bearer $CHAVE"   -H 'Content-Type: application/json'   -d '{"model":"hawk/gemma4","messages":[{"role":"user","content":"que horas sao? use a ferramenta"}],"max_tokens":2000,"tools":[{"type":"function","function":{"name":"agora","parameters":{"type":"object","properties":{}}}}]}'   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['finish_reason'])"
+```
+
+`tool_calls` = o modelo esta bem, o problema esta no transporte.
+
+E nao adianta desligar streaming pelo cliente: no Hermes, `display.streaming`
+controla a exibicao, nao o modo da chamada. Confirme pelo log de quem recebe:
+
+```bash
+sudo journalctl -u ai-hawk-server -n 20 --no-pager | grep -o "stream=[A-Za-z]*"
+```
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

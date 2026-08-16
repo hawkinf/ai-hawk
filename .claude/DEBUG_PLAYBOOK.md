@@ -58,7 +58,7 @@ o serviço não está rodando na porta 11434.
 Os 4 backends são exclusivos entre si — `systemctl` mostra qual está de pé:
 
 ```bash
-for u in ollama gemma4 qwen3coder gemma3ab; do printf "%-12s %s\n" "$u" "$(systemctl is-active $u)"; done
+for u in ollama gemma4 qwen3coder gemma4ab; do printf "%-12s %s\n" "$u" "$(systemctl is-active $u)"; done
 ```
 
 ### Autostart do Ollama (corrigido em 2026-07-29)
@@ -72,7 +72,7 @@ backends. Todos agora sobem sob demanda, via `ensure()` do swap proxy — que te
 permissão para isso no `/etc/sudoers.d/hawksvc`. Estado correto:
 
 ```
-ollama disabled | gemma4 disabled | qwen3coder disabled | gemma3ab disabled
+ollama disabled | gemma4 disabled | qwen3coder disabled | gemma4ab disabled
 ```
 
 Se algum voltar a `enabled`, a armadilha de reboot volta junto.
@@ -154,7 +154,7 @@ A correção é a unit declarar a sua própria checagem, como o `gemma4` já faz
 --health-interval 30s --health-start-period 300s
 ```
 
-Aplicado em `qwen3coder` e `gemma3ab` em 2026-08-16 (o `gemma4` já tinha).
+Aplicado em `qwen3coder` e `gemma4ab` em 2026-08-16 (o `gemma4` já tinha).
 
 ### Backend novo não aparece no open-webui
 
@@ -295,6 +295,35 @@ controla a exibicao, nao o modo da chamada. Confirme pelo log de quem recebe:
 sudo journalctl -u ai-hawk-server -n 20 --no-pager | grep -o "stream=[A-Za-z]*"
 ```
 
+### Trocar o modelo de um backend (em vez de criar outro)
+
+Modelo novo raramente justifica backend novo: a GPU so carrega **um por vez**,
+entao o quinto backend nao da acesso simultaneo - da mais unit, porta, regra de
+UFW e conexao de open-webui para manter. Quando o modelo novo SUBSTITUI o
+antigo, troque dentro do backend existente.
+
+Feito em 2026-08-16, com o Gemma 3 abliterated saindo para o Gemma 4
+abliterated. Renomear o id (`gemma3ab` -> `gemma4ab`) toca **doze pontos** -
+esqueça um e o swap quebra em silencio:
+
+1. `/etc/systemd/system/<nome>.service` (arquivo, `-m`, `--mmproj`, `-a`, nome
+   do container em `--name`/`ExecStartPre`/`ExecStop`, `Description`)
+2. `Conflicts=` das outras units llama.cpp - todas se citam mutuamente
+3. `/etc/sudoers.d/hawksvc` (start e stop)
+4. `hawk_swap_proxy.py`: constantes de porta e model id, `UNITS`, `HEALTH`,
+   `UNIFIED_LLAMACPP`, `route_backend` e o listener do porteiro
+5. Lista branca `model_ids` da conexao no open-webui
+6. Tabela de modelos do `INTEGRACAO.md`
+
+Confira com uma varredura antes de dar por encerrado:
+
+```bash
+sudo grep -rl "<id-antigo>" /opt/hawk/ /etc/systemd/system/ /etc/sudoers.d/
+```
+
+Aproveite a troca para revisar o `-c`: o Gemma 3 ab rodava com 8k, e o
+substituto ficou com 32k + KV `q8_0` ocupando 8,6 GB dos 12 GB.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |
@@ -302,7 +331,7 @@ sudo journalctl -u ai-hawk-server -n 20 --no-pager | grep -o "stream=[A-Za-z]*"
 | ollama | 11434 | 11435 |
 | gemma4 | 8090 | 8091 |
 | qwen3coder | 8092 | 8093 |
-| gemma3ab | 8094 | 8095 |
+| gemma4ab | 8094 | 8095 |
 
 **8096 é o endpoint unificado**, não sobra para backend novo. O
 `ai-hawk-server` (:8081) consome o unificado; o open-webui consome os

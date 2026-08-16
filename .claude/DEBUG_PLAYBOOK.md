@@ -55,10 +55,10 @@ o serviço não está rodando na porta 11434.
 `hawk_swap_proxy.py` descarrega um backend para carregar outro; a troca leva
 **~2 minutos**. A janela de "em uso" é `ACTIVE_WINDOW = 150s` sem requisições.
 
-Os 5 backends são exclusivos entre si — `systemctl` mostra qual está de pé:
+Os 4 backends são exclusivos entre si — `systemctl` mostra qual está de pé:
 
 ```bash
-for u in ollama gemma4 qwen3coder gemma3ab qwen38; do printf "%-12s %s\n" "$u" "$(systemctl is-active $u)"; done
+for u in ollama gemma4 qwen3coder gemma3ab; do printf "%-12s %s\n" "$u" "$(systemctl is-active $u)"; done
 ```
 
 ### Autostart do Ollama (corrigido em 2026-07-29)
@@ -72,7 +72,7 @@ backends. Todos agora sobem sob demanda, via `ensure()` do swap proxy — que te
 permissão para isso no `/etc/sudoers.d/hawksvc`. Estado correto:
 
 ```
-ollama disabled | gemma4 disabled | qwen3coder disabled | gemma3ab disabled | qwen38 disabled
+ollama disabled | gemma4 disabled | qwen3coder disabled | gemma3ab disabled
 ```
 
 Se algum voltar a `enabled`, a armadilha de reboot volta junto.
@@ -101,10 +101,12 @@ intervenção acima.
 
 ---
 
-## Modelo que não cabe inteiro na GPU (medido em 2026-08-16)
+## Modelo que não cabe inteiro na GPU — como medir
 
-O `Qwen3.8-27B-IQ4_XS.gguf` tem 15,7 GB e a RTX 3060 tem 12 GB: **ele nunca cabe
-inteiro**. Chutar `--n-gpu-layers` desperdiça VRAM ou estoura com
+> Medido em 2026-08-16 com o `Qwen3.8-27B-IQ4_XS.gguf` (15,7 GB), que acabou
+> **descartado** por ser lento demais. O método vale para o próximo candidato.
+
+Um modelo de 15,7 GB não entra numa GPU de 12 GB: **nunca cabe inteiro**. Chutar `--n-gpu-layers` desperdiça VRAM ou estoura com
 `ggml_backend_cuda_buffer_type_alloc_buffer`. O certo é medir, subindo o servidor
 com vários `-ngl` e lendo `nvidia-smi`:
 
@@ -119,15 +121,16 @@ com vários `-ngl` e lendo `nvidia-smi`:
 | 22 | carrega | 5.929 MiB |
 
 A relação é linear: **217 MiB por camada**, mais ~1.150 MiB de base (contexto
-CUDA + KV `q8_0` de 8k). Daí sai o valor em produção: **`-ngl 46`** -> 11,1 GB,
+CUDA + KV `q8_0` de 8k). Daí saiu o valor usado: **`-ngl 46`** -> 11,1 GB,
 deixando ~1,1 GB de folga. O `48` cabe, mas 707 MiB de sobra é arriscado.
 
 Desempenho resultante: **6,9 tokens/s** na geração, 29 tokens/s lendo o prompt.
-É o preço de manter ~25% das camadas na CPU — utilizável, não rápido. Por ser
-modelo de raciocínio, vale a regra do `max_tokens` >= 2000.
+É o preço de manter ~25% das camadas na CPU. **Foi o motivo do descarte**: um
+27B a 7 tokens/s não compensa perto do `gemma4`, que cabe inteiro. Use este
+número como piso — abaixo disso, não vale virar backend.
 
 Carga fria **medida** (com `echo 3 > /proc/sys/vm/drop_caches` e todos os
-backends parados): **20s** do pedido à resposta, lendo os 15,7 GB do disco. Ou
+backends parados): **20s** do pedido à resposta, lendo 15,7 GB do disco. Ou
 seja, os 75s que o `ensure()` espera pelo health sobram — não há o que ajustar
 ali. Meça antes de mexer.
 
@@ -135,23 +138,23 @@ ali. Meça antes de mexer.
 
 A imagem `llama.cpp:server-cuda` traz um `HEALTHCHECK` embutido que consulta
 `localhost:8080`. Como cada backend do stack escuta numa porta própria (8090,
-8092, 8094, 8098), o teste embutido falha sempre e o `docker ps` mostra
+8092, 8094), o teste embutido falha sempre e o `docker ps` mostra
 `Up (unhealthy)` com o modelo respondendo perfeitamente.
 
 Confirme antes de investigar — se isto responde, está tudo bem:
 
 ```bash
-curl -s http://127.0.0.1:8098/health
+curl -s http://127.0.0.1:8092/health
 ```
 
 A correção é a unit declarar a sua própria checagem, como o `gemma4` já fazia:
 
 ```
---health-cmd "curl -sf http://localhost:8098/health || exit 1"
+--health-cmd "curl -sf http://localhost:<porta>/health || exit 1"
 --health-interval 30s --health-start-period 300s
 ```
 
-Aplicado em `qwen38`, `qwen3coder` e `gemma3ab` em 2026-08-16.
+Aplicado em `qwen3coder` e `gemma3ab` em 2026-08-16 (o `gemma4` já tinha).
 
 ### Backend novo não aparece no open-webui
 
@@ -164,7 +167,7 @@ OpenAI-compatível para **cada porteiro do swap**, cada uma com lista branca em
 
 ```bash
 docker exec open-webui curl -s -o /dev/null -w "%{http_code}
-" http://host.docker.internal:8099/v1/models -H "Authorization: Bearer $(cat /etc/hawk/gateway.token)"
+" http://host.docker.internal:<porteiro>/v1/models -H "Authorization: Bearer $(cat /etc/hawk/gateway.token)"
 ```
 
 2. **Conexão nova na configuração.** Fica no SQLite, em três chaves paralelas
@@ -197,7 +200,6 @@ curl -s -o /dev/null -w "%{http_code}
 | gemma4 | 8090 | 8091 |
 | qwen3coder | 8092 | 8093 |
 | gemma3ab | 8094 | 8095 |
-| qwen38 | 8098 | 8099 |
 
 **8096 é o endpoint unificado**, não sobra para backend novo. O
 `ai-hawk-server` (:8081) consome o unificado; o open-webui consome os

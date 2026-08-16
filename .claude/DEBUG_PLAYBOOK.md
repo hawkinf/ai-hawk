@@ -409,6 +409,30 @@ Para limpar a poluicao visual:
 sudo systemctl reset-failed <backend>
 ```
 
+### Modelo de nuvem que aparece na listagem e devolve 404
+
+A listagem de modelos de um provedor **nao prova** que o modelo responde. Em
+2026-08-16, `gemini-2.5-flash` e `gemini-2.5-flash-lite` constavam no
+`/v1beta/models` da chave e devolviam 404 na chamada pelo dialeto OpenAI - que
+e o caminho que o ai-hawk usa. O `gemini-2.5-pro`, mesma familia, respondia
+normal. O `gemini-2.0-flash` que estava no `_GOOGLE_MODELS` tambem ja tinha
+morrido sem ninguem notar.
+
+Catalogo com modelo morto so aparece como erro na cara do cliente. Ao mexer em
+`_GOOGLE_MODELS` (ou qualquer lista estatica), teste **cada id pelo endpoint
+real**, nao pela listagem:
+
+```bash
+K=$(sudo grep -oP '^HAWK_API_KEYS=\K[^,]*' /opt/ai-hawk-server/.env)
+for M in gemini-3.7-flash gemini-3.6-flash; do
+  curl -s -m 60 http://127.0.0.1:8081/v1/chat/completions -H "Authorization: Bearer $K"     -H 'Content-Type: application/json'     -d "{\"model\":\"google/$M\",\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}],\"max_tokens\":2000}"     | head -c 120; echo " <- $M"
+done
+```
+
+**503 "high demand" nao e modelo morto.** O free tier da Google sobrecarrega e
+volta na tentativa seguinte - aconteceu no meio do teste e sumiu sozinho.
+Repita antes de concluir que esta indisponivel.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

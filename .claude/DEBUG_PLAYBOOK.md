@@ -153,6 +153,42 @@ A correção é a unit declarar a sua própria checagem, como o `gemma4` já faz
 
 Aplicado em `qwen38`, `qwen3coder` e `gemma3ab` em 2026-08-16.
 
+### Backend novo não aparece no open-webui
+
+O open-webui **não usa o endpoint unificado (:8096)**. Ele tem uma conexão
+OpenAI-compatível para **cada porteiro do swap**, cada uma com lista branca em
+`model_ids`. Backend novo não aparece sozinho — precisa das duas coisas:
+
+1. **Regra de UFW para a porta do porteiro.** O UFW libera por porta, uma a uma.
+   Sem a regra, o container recebe `http=000` (nem conecta), e não 401/404:
+
+```bash
+docker exec open-webui curl -s -o /dev/null -w "%{http_code}
+" http://host.docker.internal:8099/v1/models -H "Authorization: Bearer $(cat /etc/hawk/gateway.token)"
+```
+
+2. **Conexão nova na configuração.** Fica no SQLite, em três chaves paralelas
+   que precisam ficar do mesmo tamanho: `openai.api_base_urls`,
+   `openai.api_keys` e `openai.api_configs` (esta indexada por posição, string).
+   O banco é `/var/lib/docker/volumes/open-webui/_data/webui.db`.
+
+**Pare o container antes de editar o banco** — ele reescreve a configuração ao
+desligar e desfaz a alteração. E faça backup: o arquivo tem 60 MB de conversas.
+
+A chave dessas conexões é a mesma dos outros porteiros (`/etc/hawk/gateway.token`).
+
+### Lista de modelos vazia no chat do ai-hawk
+
+`-- nenhum modelo --` no seletor de `ia.hawk.com.br/ai-hawk/` quase sempre é
+**falta da chave da API** no painel de Ajustes, não backend fora do ar: o
+`/v1/models` exige `Authorization` e devolve 401. O próprio rodapé avisa
+("Informe a chave da API em Ajustes"). Confirme por fora antes de investigar:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}
+" http://192.168.200.5:8081/v1/models -H "Authorization: Bearer $CHAVE"
+```
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |
@@ -163,7 +199,9 @@ Aplicado em `qwen38`, `qwen3coder` e `gemma3ab` em 2026-08-16.
 | gemma3ab | 8094 | 8095 |
 | qwen38 | 8098 | 8099 |
 
-**8096 é o endpoint unificado**, não sobra para backend novo.
+**8096 é o endpoint unificado**, não sobra para backend novo. O
+`ai-hawk-server` (:8081) consome o unificado; o open-webui consome os
+porteiros um a um. Cada porteiro precisa da sua regra de UFW.
 
 ### Armadilha: `llama-cli` manual segura a GPU para sempre
 

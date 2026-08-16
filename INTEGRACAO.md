@@ -56,6 +56,7 @@ Modelos atuais (todos rodam local, custo zero):
 | `hawk/gemma4` | uso geral, raciocínio — **é o que fica carregado por padrão** |
 | `hawk/qwen3coder` | código |
 | `hawk/gemma3ab` | uso geral, sem restrições de conteúdo |
+| `hawk/qwen38` | 27B de raciocínio — mais capaz, porém **~7 tokens/s** (não cabe inteiro na GPU) |
 | `hawk/qwen3.6-35b:latest` | tarefas mais pesadas |
 | `hawk/laguna-xs-2.1:latest` | uso geral |
 | `hawk/huihui_ai/qwen3-abliterated:14b` | uso geral, sem restrições |

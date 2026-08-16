@@ -303,8 +303,8 @@ UFW e conexao de open-webui para manter. Quando o modelo novo SUBSTITUI o
 antigo, troque dentro do backend existente.
 
 Feito em 2026-08-16, com o Gemma 3 abliterated saindo para o Gemma 4
-abliterated. Renomear o id (`gemma3ab` -> `gemma4ab`) toca **doze pontos** -
-esqueça um e o swap quebra em silencio:
+abliterated. Renomear o id (`gemma3ab` -> `gemma4ab`) espalha por mais lugares
+do que parece - esqueça um e o swap quebra em silencio:
 
 1. `/etc/systemd/system/<nome>.service` (arquivo, `-m`, `--mmproj`, `-a`, nome
    do container em `--name`/`ExecStartPre`/`ExecStop`, `Description`)
@@ -313,13 +313,28 @@ esqueça um e o swap quebra em silencio:
 4. `hawk_swap_proxy.py`: constantes de porta e model id, `UNITS`, `HEALTH`,
    `UNIFIED_LLAMACPP`, `route_backend` e o listener do porteiro
 5. Lista branca `model_ids` da conexao no open-webui
-6. Tabela de modelos do `INTEGRACAO.md`
+6. Lista branca `model_ids` da conexao no open-webui
+7. Tabela de modelos do `INTEGRACAO.md`
 
-Confira com uma varredura antes de dar por encerrado:
+E os que ninguem lembra - foram encontrados so pela varredura, depois de a
+troca ja parecer pronta:
+
+8. `/opt/hawk/watchdog.sh` (o `check_and_heal <id> <porta>` tentaria curar um
+   servico inexistente)
+9. Os auxiliares de interface em `/opt/hawk/`: `set_menu.py`, `update_icons.py`,
+   `update_colors.py`, `update_funcicons.py`, `colors_multicat.py` - mapeiam
+   icone e cor por id de modelo
+10. `comfyui.service` - **nao e llama.cpp, mas disputa a mesma GPU** e tem
+    `Conflicts=` nos backends
+
+Nao confie na lista: rode a varredura, e **sem `head`**, que ja escondeu
+metade dos arquivos aqui:
 
 ```bash
-sudo grep -rl "<id-antigo>" /opt/hawk/ /etc/systemd/system/ /etc/sudoers.d/
+sudo grep -rl "<id-antigo>" /opt/hawk/ /etc/systemd/system/ /etc/sudoers.d/ | grep -v "\.bak"
 ```
+
+Depois de tocar qualquer `.service`, `systemctl daemon-reload`.
 
 Aproveite a troca para revisar o `-c`: o Gemma 3 ab rodava com 8k, e o
 substituto ficou com 32k + KV `q8_0` ocupando 8,6 GB dos 12 GB.

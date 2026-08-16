@@ -170,7 +170,13 @@ async def list_models(
     )
 
 
-@app.post("/v1/chat/completions", tags=["openai"])
+@app.post(
+    "/v1/chat/completions",
+    tags=["openai"],
+    response_model=ChatCompletionResponse,
+    # Sem isto toda resposta passaria a carregar "tool_calls": null.
+    response_model_exclude_none=True,
+)
 async def chat_completions(
     body: ChatCompletionRequest,
     request: Request,
@@ -205,7 +211,11 @@ async def chat_completions(
         model=spec.id,
         choices=[
             Choice(
-                message=ChoiceMessage(content=result.text),
+                message=ChoiceMessage(
+                    # Com tool_calls, o padrao OpenAI e content nulo.
+                    content=(result.text or None) if result.tool_calls else result.text,
+                    tool_calls=result.tool_calls,
+                ),
                 finish_reason=result.finish_reason,
             )
         ],

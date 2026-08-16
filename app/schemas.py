@@ -12,12 +12,19 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-Role = Literal["system", "user", "assistant"]
+Role = Literal["system", "user", "assistant", "tool"]
 
 
 class ChatMessage(BaseModel):
     role: Role
-    content: str
+    # Nulo quando a mensagem carrega apenas tool_calls (o modelo decidiu chamar
+    # uma ferramenta em vez de responder texto) - e o formato da OpenAI.
+    content: str | None = None
+    # Ferramentas que o assistente pediu para executar.
+    tool_calls: list[dict[str, Any]] | None = None
+    # Amarra o resultado (role="tool") a chamada que o originou.
+    tool_call_id: str | None = None
+    name: str | None = None
 
 
 class ChatCompletionRequest(BaseModel):
@@ -28,6 +35,11 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int | None = Field(default=None, gt=0, le=128_000)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     stop: list[str] | None = None
+    # Function calling. Repassados ao provedor sem interpretacao: quem valida o
+    # schema e o modelo. Sem isto o campo era descartado em silencio e agentes
+    # (Hermes, OpenClaw, SDKs) recebiam um modelo cego para as proprias tools.
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: Any | None = None
 
     @field_validator("messages")
     @classmethod
@@ -38,7 +50,7 @@ class ChatCompletionRequest(BaseModel):
 
     def system_prompt(self) -> str | None:
         """Concatena as mensagens de sistema (alguns provedores as tratam a parte)."""
-        parts = [m.content for m in self.messages if m.role == "system"]
+        parts = [m.content for m in self.messages if m.role == "system" and m.content]
         return "\n\n".join(parts) if parts else None
 
     def conversation(self) -> list[ChatMessage]:
@@ -54,7 +66,8 @@ class Usage(BaseModel):
 
 class ChoiceMessage(BaseModel):
     role: Literal["assistant"] = "assistant"
-    content: str
+    content: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class Choice(BaseModel):

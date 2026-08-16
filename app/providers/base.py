@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.schemas import ChatCompletionRequest
 
@@ -53,6 +54,8 @@ class ChatResult:
     finish_reason: str = "stop"
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    # Preenchido quando o modelo pede execucao de ferramenta em vez de texto.
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class ChatProvider(abc.ABC):

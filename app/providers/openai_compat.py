@@ -149,7 +149,7 @@ class OpenAICompatProvider(ChatProvider):
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": spec.upstream_id,
-            "messages": [m.model_dump() for m in req.messages],
+            "messages": [m.model_dump(exclude_none=True) for m in req.messages],
             "stream": stream,
             "max_tokens": req.max_tokens or spec.max_output_tokens,
         }
@@ -160,6 +160,13 @@ class OpenAICompatProvider(ChatProvider):
                 body["top_p"] = req.top_p
         if req.stop:
             body["stop"] = req.stop
+        # Function calling: repassado como veio. O ai-hawk nao interpreta o
+        # schema - quem valida e o modelo. Sem isto o campo sumia aqui e o
+        # modelo respondia como se nao tivesse ferramenta alguma.
+        if req.tools:
+            body["tools"] = req.tools
+            if req.tool_choice is not None:
+                body["tool_choice"] = req.tool_choice
         return body
 
     async def chat(self, req: ChatCompletionRequest, spec: ModelSpec) -> ChatResult:
@@ -180,6 +187,7 @@ class OpenAICompatProvider(ChatProvider):
         usage = data.get("usage") or {}
         return ChatResult(
             text=message.get("content") or "",
+            tool_calls=message.get("tool_calls") or None,
             finish_reason=choices[0].get("finish_reason") or "stop",
             prompt_tokens=usage.get("prompt_tokens", 0) or 0,
             completion_tokens=usage.get("completion_tokens", 0) or 0,

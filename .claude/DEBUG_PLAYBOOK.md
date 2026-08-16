@@ -390,6 +390,25 @@ plataforma no **config.yaml**, em `platforms.whatsapp.enabled`. Procurar no
 `.env` nao acha nada. Plataforma habilitada e nao pareada derruba o gateway
 com `status=1/FAILURE` na partida.
 
+### Backend em `failed` depois de uma troca e normal
+
+`systemctl status` mostrando `failed` com `status=137/n/a` logo apos um swap
+nao e defeito: 137 e SIGKILL (128+9). O `docker stop` estoura o prazo, o
+container e morto, e como `qwen3coder` e `gemma4ab` tem `Restart=on-failure`,
+o systemd marca a unit como falha. O `gemma4` nao mostra isso porque usa
+`Restart=no`.
+
+Nao troque para `Restart=no` so pelo estado bonito: `on-failure` levanta o
+container quando ele cai de verdade (OOM, por exemplo). O `Conflicts=` ja
+impede que o systemd o ressuscite durante a troca. E `ensure()` inicia unit em
+estado `failed` sem problema, entao nada quebra.
+
+Para limpar a poluicao visual:
+
+```bash
+sudo systemctl reset-failed <backend>
+```
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

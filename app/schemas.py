@@ -129,6 +129,7 @@ def stream_chunk(
     delta: str | None = None,
     role: str | None = None,
     finish_reason: str | None = None,
+    tool_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Monta um chunk SSE no formato chat.completion.chunk."""
     payload: dict[str, Any] = {}
@@ -136,6 +137,8 @@ def stream_chunk(
         payload["role"] = role
     if delta is not None:
         payload["content"] = delta
+    if tool_calls is not None:
+        payload["tool_calls"] = tool_calls
     return {
         "id": completion_id,
         "object": "chat.completion.chunk",

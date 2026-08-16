@@ -78,8 +78,14 @@ class ChatProvider(abc.ABC):
         """Completa a conversa de uma vez."""
 
     @abc.abstractmethod
-    def stream(self, req: ChatCompletionRequest, spec: ModelSpec) -> AsyncIterator[str]:
-        """Gera a resposta em pedacos de texto."""
+    def stream(
+        self, req: ChatCompletionRequest, spec: ModelSpec
+    ) -> AsyncIterator[str | dict[str, Any]]:
+        """Gera a resposta em pedacos.
+
+        Emite `str` para texto. Para o que nao e texto - `tool_calls` e
+        `finish_reason` - emite um dict com o delta cru no formato OpenAI.
+        """
 
     async def aclose(self) -> None:
         """Libera recursos (conexoes HTTP)."""

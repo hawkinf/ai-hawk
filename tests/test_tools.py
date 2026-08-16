@@ -10,6 +10,8 @@ ferramentas. Nenhum dos dois estava errado: os dois foram cegados no caminho.
 
 from __future__ import annotations
 
+import json
+
 from app.providers.base import ModelSpec
 from app.providers.openai_compat import OpenAICompatProvider
 from app.schemas import ChatCompletionRequest
@@ -153,3 +155,87 @@ def test_resposta_comum_nao_ganha_tool_calls(client):
     msg = r.json()["choices"][0]["message"]
     assert "tool_calls" not in msg
     assert msg["content"] == "eco: oi"
+
+
+# --- streaming ---------------------------------------------------------------
+# O gerador SSE so repassava deltas de TEXTO. Com ferramentas, o cliente recebia
+# um fluxo vazio e desistia ("empty content after retries"). Foi o que travou o
+# laco de agente do Hermes contra os modelos locais em 2026-08-16.
+
+
+def test_stream_chunk_carrega_tool_calls():
+    from app.schemas import stream_chunk
+
+    chamada = {"index": 0, "id": "call_1", "function": {"name": "f", "arguments": "{}"}}
+    c = stream_chunk("id1", "m", tool_calls=[chamada])
+    assert c["choices"][0]["delta"]["tool_calls"] == [chamada]
+
+
+def test_stream_chunk_sem_tool_calls_nao_inventa_a_chave():
+    from app.schemas import stream_chunk
+
+    c = stream_chunk("id1", "m", delta="oi")
+    assert "tool_calls" not in c["choices"][0]["delta"]
+
+
+def _sse_para_json(texto: str) -> list[dict]:
+    """Extrai os objetos JSON de um corpo SSE, ignorando o [DONE]."""
+    saida = []
+    for linha in texto.splitlines():
+        if not linha.startswith("data: "):
+            continue
+        corpo = linha[6:].strip()
+        if corpo == "[DONE]":
+            continue
+        saida.append(json.loads(corpo))
+    return saida
+
+
+def test_streaming_repassa_tool_calls_e_finish_reason(client, monkeypatch):
+    chamada = {
+        "index": 0,
+        "id": "call_7",
+        "type": "function",
+        "function": {"name": "get_weather", "arguments": '{"cidade":"Recife"}'},
+    }
+
+    async def stream_com_tool(self, req, spec):
+        yield {"tool_calls": [chamada]}
+        yield {"finish_reason": "tool_calls"}
+
+    stub = client.app.state.registry.providers["stub"]
+    monkeypatch.setattr(type(stub), "stream", stream_com_tool)
+
+    r = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "stub/eco-free",
+            "messages": [{"role": "user", "content": "clima?"}],
+            "stream": True,
+            "tools": [FERRAMENTA],
+        },
+    )
+    assert r.status_code == 200
+    chunks = _sse_para_json(r.text)
+    deltas = [c["choices"][0]["delta"] for c in chunks]
+    assert any(d.get("tool_calls") == [chamada] for d in deltas)
+    # O motivo tem que chegar como "tool_calls", nao o "stop" fixo de antes.
+    assert chunks[-1]["choices"][0]["finish_reason"] == "tool_calls"
+
+
+def test_streaming_de_texto_continua_igual(client):
+    """Anti-regressao: o fluxo comum nao pode mudar de formato."""
+    r = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "stub/eco-free",
+            "messages": [{"role": "user", "content": "oi"}],
+            "stream": True,
+        },
+    )
+    assert r.status_code == 200
+    chunks = _sse_para_json(r.text)
+    texto = "".join(c["choices"][0]["delta"].get("content") or "" for c in chunks)
+    assert texto.strip() == "eco: oi"
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+    assert all("tool_calls" not in c["choices"][0]["delta"] for c in chunks)

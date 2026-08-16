@@ -195,7 +195,7 @@ class OpenAICompatProvider(ChatProvider):
 
     async def stream(
         self, req: ChatCompletionRequest, spec: ModelSpec
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[str | dict[str, Any]]:
         payload = self._payload(req, spec, stream=True)
         try:
             async with self._http().stream(
@@ -213,9 +213,17 @@ class OpenAICompatProvider(ChatProvider):
                     choices = chunk.get("choices") or []
                     if not choices:
                         continue
-                    delta = (choices[0].get("delta") or {}).get("content")
-                    if delta:
-                        yield delta
+                    escolha = choices[0]
+                    delta = escolha.get("delta") or {}
+                    # Os fragmentos de tool_call vao crus: e o cliente que
+                    # remonta nome e argumentos pedaco por pedaco.
+                    if delta.get("tool_calls"):
+                        yield {"tool_calls": delta["tool_calls"]}
+                    conteudo = delta.get("content")
+                    if conteudo:
+                        yield conteudo
+                    if escolha.get("finish_reason"):
+                        yield {"finish_reason": escolha["finish_reason"]}
         except Exception as exc:
             raise self._fail(exc) from exc
 

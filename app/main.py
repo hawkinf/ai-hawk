@@ -236,9 +236,26 @@ async def _sse(provider, body: ChatCompletionRequest, spec) -> AsyncIterator[str
 
     yield emit(stream_chunk(completion_id, spec.id, role="assistant", delta=""))
 
+    # O provedor pode emitir texto (str) ou um delta cru em dict, que e como
+    # tool_calls e finish_reason chegam. Sem isto o streaming descartava as
+    # chamadas de ferramenta e o cliente recebia resposta vazia.
+    motivo = "stop"
     try:
         async for piece in provider.stream(body, spec):
-            yield emit(stream_chunk(completion_id, spec.id, delta=piece))
+            if isinstance(piece, str):
+                yield emit(stream_chunk(completion_id, spec.id, delta=piece))
+                continue
+            if piece.get("finish_reason"):
+                motivo = piece["finish_reason"]
+            if piece.get("content") or piece.get("tool_calls"):
+                yield emit(
+                    stream_chunk(
+                        completion_id,
+                        spec.id,
+                        delta=piece.get("content"),
+                        tool_calls=piece.get("tool_calls"),
+                    )
+                )
     except ProviderError as exc:
         # O status HTTP ja foi enviado (200); o erro vai como evento no fluxo.
         log.warning("Erro durante streaming em %s: %s", exc.provider, exc.message)
@@ -251,7 +268,7 @@ async def _sse(provider, body: ChatCompletionRequest, spec) -> AsyncIterator[str
         yield "data: [DONE]\n\n"
         return
 
-    yield emit(stream_chunk(completion_id, spec.id, finish_reason="stop"))
+    yield emit(stream_chunk(completion_id, spec.id, finish_reason=motivo))
     yield "data: [DONE]\n\n"
 
 

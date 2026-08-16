@@ -339,6 +339,57 @@ Depois de tocar qualquer `.service`, `systemctl daemon-reload`.
 Aproveite a troca para revisar o `-c`: o Gemma 3 ab rodava com 8k, e o
 substituto ficou com 32k + KV `q8_0` ocupando 8,6 GB dos 12 GB.
 
+### Gateway do Hermes (Telegram) - o que confunde
+
+Servico de **usuario**, nao de sistema. Comandos mudam de forma:
+
+```bash
+systemctl --user status hermes-gateway
+journalctl --user -u hermes-gateway -n 30 --no-pager
+```
+
+Para dirigir como root, tem que emprestar a sessao do usuario, senao o
+systemctl nao encontra nada:
+
+```bash
+sudo -u hawk XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart hermes-gateway
+```
+
+Confira `loginctl show-user hawk --property=Linger`. Sem `Linger=yes` o servico
+morre quando a sessao do usuario termina - inclusive no reboot.
+
+**O Telegram nao registra linha de sucesso.** O log para em
+`Connecting to Telegram (attempt 1/8)` e fica assim mesmo funcionando, o que
+faz parecer travado. Para saber se esta realmente consumindo, provoque um
+conflito: o Telegram so aceita UM consumidor de `getUpdates`.
+
+```bash
+T=$(grep -oP '^TELEGRAM_BOT_TOKEN=\K.*' ~/.hermes/.env)
+curl -s "https://api.telegram.org/bot$T/getUpdates?timeout=1&limit=1" | head -c 200
+```
+
+**409 Conflict = esta conectado** (o gateway e o outro consumidor). `200 ok`
+com a lista vazia significa que ninguem esta ouvindo.
+
+**Controle de acesso.** `TELEGRAM_ALLOWED_USERS` e o perimetro inteiro - quem
+esta na lista manda o agente executar comando no servidor. No codigo do
+adaptador:
+
+```python
+if not allowed_csv:
+    return True          # lista vazia = TODO MUNDO autorizado
+```
+
+`*` na lista tem o mesmo efeito. Com a lista preenchida, DM de desconhecido e
+ignorada em silencio (regra 5 do `_get_unauthorized_dm_behavior`), sem cair no
+fluxo de pareamento.
+
+**Mensagem de erro que mente:** o aviso do WhatsApp manda "remove
+WHATSAPP_ENABLED from your .env", mas o `hermes gateway setup` grava a
+plataforma no **config.yaml**, em `platforms.whatsapp.enabled`. Procurar no
+`.env` nao acha nada. Plataforma habilitada e nao pareada derruba o gateway
+com `status=1/FAILURE` na partida.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

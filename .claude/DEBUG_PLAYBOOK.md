@@ -433,6 +433,52 @@ done
 volta na tentativa seguinte - aconteceu no meio do teste e sumiu sozinho.
 Repita antes de concluir que esta indisponivel.
 
+### Busca web do agente sai de graca pelo searxng do proprio host
+
+O Hermes aceita `SEARXNG_URL` no `~/.hermes/.env` - sem chave de API e sem
+custo, usando o container que ja roda neste host. Duas pegadinhas:
+
+1. O container **nao publica porta**, e o Hermes roda fora do Docker. Use o IP
+   dele na bridge. **Esse IP muda se o container for recriado**; redescubra com:
+
+```bash
+docker inspect searxng --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+```
+
+2. O searxng vem com **formato JSON desligado** por padrao. Aqui ja estava
+   ligado (`search.formats: [html, json]` em `/etc/searxng/settings.yml`), mas
+   se a busca voltar vazia, e o primeiro lugar para olhar.
+
+Confirme antes de culpar o agente:
+
+```bash
+curl -s "http://<ip>:8080/search?q=teste&format=json" | head -c 120
+```
+
+### Cota da nuvem acaba: use a cadeia de reserva
+
+O free tier do Gemini tem limite por minuto E por dia, e o diario acaba mais
+rapido do que parece - um dia de testes bastou. Quando acaba, vem `429` e o
+agente fica **mudo**. Para um agente que atende no Telegram isso e inaceitavel.
+
+O Hermes tem `fallback_providers` no topo do `config.yaml` - lista de
+`{provider, model, base_url}` tentada em ordem quando a primaria falha por
+rate-limit, 5xx ou erro de conexao:
+
+```yaml
+fallback_providers:
+  - provider: custom
+    model: hawk/gemma4
+    base_url: http://127.0.0.1:8081/v1
+```
+
+`hermes fallback add` faz o mesmo, mas so no modo interativo. Confira com
+`hermes fallback list`.
+
+Assim a nuvem cuida do dia a dia e o modelo local segura quando a cota estoura,
+sem ninguem perceber. Verificado em 2026-08-16 com a cota ja esgotada: o agente
+respondeu pelo `gemma4` em 7s sem intervencao.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

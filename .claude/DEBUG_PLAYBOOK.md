@@ -390,6 +390,31 @@ plataforma no **config.yaml**, em `platforms.whatsapp.enabled`. Procurar no
 `.env` nao acha nada. Plataforma habilitada e nao pareada derruba o gateway
 com `status=1/FAILURE` na partida.
 
+### O watchdog desfazia as trocas do swap (corrigido em 2026-08-16)
+
+Sintoma: notificacao "[backend] estava em failed, reiniciei e voltou" e, um
+segundo depois, o backend que o swap tinha acabado de subir **cai**. A GPU fica
+com o modelo errado e ninguem entende por que.
+
+Causa: dois sistemas com ideias opostas. O `hawk-watchdog.timer` roda a cada 5
+minutos e o `check_and_heal` reinicia qualquer unit em `failed`. So que parar um
+backend pelo swap **deixa a unit em `failed`** (docker stop estoura o prazo,
+SIGKILL, exit 137). O watchdog lia isso como queda, ressuscitava o backend, e o
+`Conflicts=` derrubava o que estava certo.
+
+Correcao: o `ensure()` do swap agora roda `systemctl reset-failed` logo depois
+de cada `stop`. Assim `failed` volta a significar "caiu de verdade" - o watchdog
+segue curando queda real e para de desfazer troca normal. Precisou de
+`reset-failed` no `/etc/sudoers.d/hawksvc`, porque o proxy roda como `hawksvc`.
+
+> **Atencao ao ler o estado do watchdog:** `systemctl is-active hawk-watchdog`
+> devolve `inactive` e `is-enabled` devolve `static` MESMO funcionando - ele e
+> `oneshot` disparado por timer. Confira o timer, nao o servico:
+>
+> ```bash
+> systemctl list-timers hawk-watchdog.timer --no-pager
+> ```
+
 ### Backend em `failed` depois de uma troca e normal
 
 `systemctl status` mostrando `failed` com `status=137/n/a` logo apos um swap

@@ -532,6 +532,44 @@ sempre) e falha de rede virando **texto fixo** - se o erro mudar de forma a cada
 vez, vira alarme diario. Exemplo em `~/.hermes/scripts/upstream-versions.sh`,
 que imprime `indisponivel` quando a API nao responde.
 
+### Hermes tenta modelo PAGO por conta propria (pista auxiliar)
+
+Alem do modelo principal, o Hermes usa um "auxiliary client" para tarefas
+pequenas - gerar titulo de conversa, por exemplo. **Essa pista aceita SKU pago
+por padrao.** No log:
+
+```
+WARNING agent.auxiliary_client: PAID lane engaged for auxiliary task —
+OpenRouter fallback model 'google/gemini-3.6-flash' is not a :free SKU and
+may incur real spend. Set auxiliary.free_only: true to restrict auxiliary...
+```
+
+Aqui nao houve gasto so porque nao ha chave do OpenRouter configurada - o log
+segue com `credential pool: no available entries` e marca o provedor como
+`unhealthy (payment / credit error)`. Ou seja, a protecao era **acidental**.
+
+Para quem tem regra de custo zero, torne estrutural:
+
+```bash
+hermes config set auxiliary.free_only true
+```
+
+Ligado em 2026-08-17. Vale conferir depois de cada `hermes update`.
+
+### Identidade que o modelo declara NAO e prova
+
+Perguntar "qual modelo esta te respondendo" e confiar na resposta e erro: LLM
+alucina a propria identidade. Numa verificacao aqui, a resposta veio "Eu sou o
+Gemini 3.7 Flash" enquanto a duvida era justamente se a cadeia de reserva tinha
+caido para o local. Confirme pelo log, com hora:
+
+```bash
+grep -E "conversation turn|Turn ended" ~/.hermes/logs/agent.log | tail -2
+```
+
+A linha traz `model=` com o id real. Cuidado ao filtrar: `tail` sobre um grep
+mal montado devolve turno antigo e faz parecer que a execucao nao registrou.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

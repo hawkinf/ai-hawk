@@ -479,6 +479,34 @@ Assim a nuvem cuida do dia a dia e o modelo local segura quando a cota estoura,
 sem ninguem perceber. Verificado em 2026-08-16 com a cota ja esgotada: o agente
 respondeu pelo `gemma4` em 7s sem intervencao.
 
+### Cron do Hermes: ordem dos argumentos e o monitor que economiza cota
+
+O `prompt` e posicional e, junto com `--monitor-script`, **tem que vir logo
+depois do `schedule`**. Com as opcoes antes do prompt o argparse recusa com um
+"unrecognized arguments" que mostra a ajuda do comando raiz e nao a do cron -
+o que faz parecer erro de sintaxe do prompt.
+
+```bash
+# funciona
+hermes cron create "0 11 * * *" "PROMPT" --name X --deliver telegram --monitor-script s.sh
+# falha
+hermes cron create "0 11 * * *" --monitor-script s.sh --name X "PROMPT"
+```
+
+Prompt longo com quebras de linha passa bem, desde que venha por
+`"$(cat arquivo)"` DENTRO do shell que executa o comando. Variavel exportada
+nao sobrevive ao `sudo -u hawk -i`, que zera o ambiente.
+
+**`--monitor-script` e o que torna vigilancia barata.** O script roda a cada
+tick; saida identica (hash byte a byte) **suprime o agente inteiro**, entao dia
+parado nao consome token nem cota de nuvem. So mudanca acorda o LLM, ja com o
+diff no prompt.
+
+Duas regras para o script: saida **estavel** (nada de data/hora, que mudaria
+sempre) e falha de rede virando **texto fixo** - se o erro mudar de forma a cada
+vez, vira alarme diario. Exemplo em `~/.hermes/scripts/upstream-versions.sh`,
+que imprime `indisponivel` quando a API nao responde.
+
 ### Mapa de portas dos backends
 
 | backend | container | porteiro no swap |

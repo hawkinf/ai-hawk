@@ -175,6 +175,13 @@ input[type="range"] { accent-color: var(--accent); }
 .btn-primary:hover { background: #3d7de6; }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* Enquanto a resposta corre, o mesmo botao vira "parar". */
+.btn-primary .icone-parar { display: none; }
+.btn-primary.parar { background: var(--danger); }
+.btn-primary.parar:hover { background: #c93b40; }
+.btn-primary.parar .icone-enviar { display: none; }
+.btn-primary.parar .icone-parar { display: block; }
+
 .status {
   display: flex;
   align-items: center;
@@ -247,6 +254,14 @@ input[type="range"] { accent-color: var(--accent); }
 }
 .bubble-body { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
 .msg.error .bubble-body { color: var(--danger); }
+
+/* Marca a resposta que o usuario mandou parar no meio. */
+.aviso {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}
 
 .bubble-body pre {
   background: var(--bg-panel);

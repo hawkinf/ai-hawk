@@ -32,6 +32,7 @@
   let history = [];
   let busy = false;
   let aborter = null;
+  let descartarParcial = false;
 
   // ------------------------------------------------------------------ store
 
@@ -69,6 +70,25 @@
     const key = el.apikey.value.trim();
     if (key) h.Authorization = `Bearer ${key}`;
     return h;
+  }
+
+  /** O botao de enviar vira o de parar enquanto a resposta esta chegando. */
+  function marcarOcupado(estado) {
+    busy = estado;
+    el.send.classList.toggle("parar", estado);
+    el.send.setAttribute("aria-label", estado ? "Parar" : "Enviar");
+    el.send.title = estado ? "Parar a resposta" : "Enviar";
+  }
+
+  /**
+   * Interrompe a resposta em andamento.
+   * @param descartar - true joga fora o pedaco ja recebido (nova conversa);
+   *                    false guarda o que chegou (o usuario mandou parar).
+   */
+  function pararResposta(descartar) {
+    if (!aborter) return;
+    descartarParcial = descartar;
+    aborter.abort();
   }
 
   function setStatus(text, state) {
@@ -268,9 +288,8 @@
       return;
     }
 
-    busy = true;
+    marcarOcupado(true);
     aborter = new AbortController();
-    el.send.disabled = true;
     addMessage("user", userText);
 
     const payload = buildPayload(userText);
@@ -309,15 +328,28 @@
       history.push({ role: "user", content: userText });
       history.push({ role: "assistant", content: answer });
     } catch (err) {
-      target.closest(".msg")?.remove();
-      // Nova conversa cancela a resposta em andamento: isso e ordem do usuario,
-      // nao falha - nao vale poluir a tela com um balao de erro.
-      if (err.name !== "AbortError") addMessage("error", err.message);
+      // Parada a pedido nao e falha: nada de balao de erro. E o pedaco que ja
+      // chegou vale a pena guardar, a menos que a conversa toda tenha ido embora.
+      if (err.name === "AbortError") {
+        if (answer && !descartarParcial) {
+          const nota = document.createElement("div");
+          nota.className = "aviso";
+          nota.textContent = "resposta interrompida";
+          target.append(nota);
+          history.push({ role: "user", content: userText });
+          history.push({ role: "assistant", content: answer });
+        } else {
+          target.closest(".msg")?.remove();
+        }
+      } else {
+        target.closest(".msg")?.remove();
+        addMessage("error", err.message);
+      }
     } finally {
       aborter = null;
+      descartarParcial = false;
       target.classList.remove("cursor");
-      busy = false;
-      el.send.disabled = false;
+      marcarOcupado(false);
       el.input.focus();
       scrollToBottom();
     }
@@ -366,9 +398,11 @@
 
   el.composer.addEventListener("submit", (e) => {
     e.preventDefault();
-    // Com uma resposta em andamento o envio e recusado la embaixo; sair antes
-    // de limpar a caixa preserva o que o usuario escreveu.
-    if (busy) return;
+    // Com a resposta correndo o botao e "parar" - o Enter nao chega aqui.
+    if (busy) {
+      pararResposta(false);
+      return;
+    }
     const text = el.input.value.trim();
     if (!text) return;
     el.input.value = "";
@@ -379,6 +413,8 @@
   el.input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      // Durante a resposta o Enter nao envia nem para: so nao apaga o texto.
+      if (busy) return;
       el.composer.requestSubmit();
     }
   });
@@ -409,7 +445,7 @@
   el.stream.addEventListener("change", saveSettings);
 
   el.newChat.addEventListener("click", () => {
-    if (aborter) aborter.abort();
+    pararResposta(true);
     history = [];
     el.messages.innerHTML =
       '<div class="empty-state"><h2>Como posso ajudar?</h2>' +

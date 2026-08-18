@@ -70,9 +70,12 @@
 
       <form id="composer" class="composer">
         <textarea id="input" rows="1" placeholder="Escreva sua mensagem&hellip;  (Enter envia, Shift+Enter quebra linha)"></textarea>
-        <button id="send" class="btn btn-primary" type="submit" aria-label="Enviar">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <button id="send" class="btn btn-primary" type="submit" aria-label="Enviar" title="Enviar">
+          <svg class="icone-enviar" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15.6 12 3.4 13.8z" fill="currentColor"/>
+          </svg>
+          <svg class="icone-parar" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor"/>
           </svg>
         </button>
       </form>

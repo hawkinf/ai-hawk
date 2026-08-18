@@ -452,32 +452,44 @@ Duas correcoes, uma para a causa e uma para o estrago:
    Com o modelo de tarefa na nuvem, da para religar titulo e tags sem custo de
    GPU (Admin Settings -> Interface), se a falta do titulo automatico incomodar.
 
-2. **Trava de gracia no swap.** `hawk_swap_proxy.py` passou a registrar qual
-   backend atendeu inferencia (`touch_backend`) e a recusar despejo de quem
-   respondeu nos ultimos `GRACE` segundos (`backend_recente`): o pedido leva
-   503 `gpu_busy` em vez de derrubar a conversa. Vale nos tres caminhos -
-   porteiro do Ollama, porteiros OpenAI e gateway unificado.
+2. **Trava do pedido em andamento no swap.** `hawk_swap_proxy.py` conta relays
+   vivos por backend (`inflight_add`) e recusa despejar backend com pedido em
+   andamento (`backend_recente`): quem pediu a troca leva 503 `gpu_busy` em vez
+   de derrubar a resposta. Conta desde o inicio do atendimento, entao o swap que
+   o proprio pedido disparou (ate 2 min) tambem esta protegido. Vale nos tres
+   caminhos - porteiro do Ollama, porteiros OpenAI e gateway unificado.
+
+   **A primeira tentativa media tempo, e estava errada.** A regra era "backend
+   que respondeu nos ultimos 60s nao sai", e ela punia o uso normal: terminar a
+   pergunta, trocar de modelo de proposito e levar `gpu_busy` na cara - com a
+   mensagem falando de "outra pessoa" que nao existia. Quem precisa de protecao
+   e o pedido em andamento, nao o relogio. A janela por tempo continua no codigo
+   como extra desligado:
 
 ```bash
-HAWK_SWAP_GRACE=60   # default; 0 desliga a trava
+HAWK_SWAP_GRACE=0    # default: so protege pedido em andamento
+HAWK_SWAP_GRACE=60   # opcional: protege tambem por 60s depois da resposta
 ```
 
-Efeito colateral aceito: trocar de modelo de proposito dentro da janela devolve
-`gpu_busy`. Espere a janela ou baixe `HAWK_SWAP_GRACE`.
-
-Teste que prova a trava (com o Ollama quente):
+Os dois testes que provam a trava - o primeiro tem de passar, o segundo tem de
+bloquear:
 
 ```bash
-curl -sS http://127.0.0.1:11435/api/chat -d '{"model":"<modelo>","messages":[{"role":"user","content":"ola"}],"stream":false}'
+# 1) troca deliberada logo depois de uma resposta: HTTP 200, ~7 s
+curl -sS http://127.0.0.1:11435/api/chat -d '{"model":"<modelo-ollama>","messages":[{"role":"user","content":"ola"}],"stream":false}'
 curl -sS -o /dev/null -w "%{http_code}
-" http://127.0.0.1:8095/v1/chat/completions   -H "Authorization: Bearer $(sudo cat /etc/hawk/gateway.token)"   -d '{"model":"gemma4ab","messages":[{"role":"user","content":"titulo"}]}'
+" http://127.0.0.1:8095/v1/chat/completions   -H "Authorization: Bearer $(sudo cat /etc/hawk/gateway.token)"   -d '{"model":"gemma4ab","messages":[{"role":"user","content":"ola"}]}'
+
+# 2) pedido ao outro backend NO MEIO de uma resposta longa: HTTP 503
+#    (dispare a longa em background, espere ~6 s, e entao chame o outro porteiro)
 ```
 
-O segundo comando tem de responder `503` e o Ollama continuar `active`. Depois
-da janela, o mesmo pedido troca normalmente (~7 s).
+No teste 2 o log mostra `BLOQUEIO ollama: gemma4ab esta em uso`, a resposta
+longa termina inteira (`data: [DONE]`) e o backend em uso continua `active`.
 
 Backups deixados na maquina: `/opt/hawk/hawk_swap_proxy.py.bak-2026-08-18-gracia`
-e `/var/lib/docker/volumes/open-webui/_data/webui.db.bak-2026-08-18-tarefas`.
+(antes da trava), `.bak-2026-08-18-inflight` (antes da troca por pedido em
+andamento) e `/var/lib/docker/volumes/open-webui/_data/webui.db.bak-2026-08-18-tarefas`.
 
 ### Backend em `failed` depois de uma troca e normal
 

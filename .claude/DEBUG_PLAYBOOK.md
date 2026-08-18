@@ -415,6 +415,70 @@ segue curando queda real e para de desfazer troca normal. Precisou de
 > systemctl list-timers hawk-watchdog.timer --no-pager
 > ```
 
+### "Ollama: Server disconnected" no open-webui (corrigido em 2026-08-18)
+
+Sintoma: no meio da conversa o balao do modelo mostra so `Ollama: Server
+disconnected`. Depois, a GPU esta com **outro** modelo carregado e ninguem
+trocou de propria vontade.
+
+Causa: o open-webui dispara **inferencias de fundo** no fim de cada resposta -
+titulo, tags e sugestoes de continuacao (`background_tasks_handler` ->
+`generate_follow_ups`). Elas usam o modelo *selecionado*, que nem sempre e o
+que acabou de responder. Caindo no porteiro de outro backend, viram um pedido de
+swap: o backend que estava servindo a conversa e parado no meio, e o cliente ve
+a conexao morrer. A trava anti-thrashing nao segurava nada porque ela compara
+**usuarios**, e sem os headers `X-OpenWebUI-User-*` todo mundo chega como `api`
+- inclusive as tarefas de fundo, que sao o proprio usuario.
+
+Como confirmar:
+
+```bash
+sudo journalctl -u hawk-swap --since today | grep "\[swap\]"
+sudo docker logs --since <hora> open-webui 2>&1 | grep -A5 background_tasks_handler
+```
+
+No log do swap o padrao aparece limpo: um `ollama ... swap=True`, a conversa
+andando, e segundos depois um `gemma4ab ... swap=True` que ninguem pediu.
+
+Duas correcoes, uma para a causa e uma para o estrago:
+
+1. **Tarefas de fundo fora da GPU.** No banco do open-webui,
+   `task.model.default` e `task.model.external` passaram a apontar para
+   `models/gemini-flash-lite-latest` (nuvem, free tier, zero GPU) e
+   `task.title.enable`, `task.tags.enable` e `task.follow_up.enable` foram para
+   `false`. Chaves vazias significam "use o modelo do chat" - e era isso que
+   jogava as tarefas na GPU. **Pare o container antes de editar o banco** e
+   confira depois de subir: ele reescreve config ao desligar.
+   Com o modelo de tarefa na nuvem, da para religar titulo e tags sem custo de
+   GPU (Admin Settings -> Interface), se a falta do titulo automatico incomodar.
+
+2. **Trava de gracia no swap.** `hawk_swap_proxy.py` passou a registrar qual
+   backend atendeu inferencia (`touch_backend`) e a recusar despejo de quem
+   respondeu nos ultimos `GRACE` segundos (`backend_recente`): o pedido leva
+   503 `gpu_busy` em vez de derrubar a conversa. Vale nos tres caminhos -
+   porteiro do Ollama, porteiros OpenAI e gateway unificado.
+
+```bash
+HAWK_SWAP_GRACE=60   # default; 0 desliga a trava
+```
+
+Efeito colateral aceito: trocar de modelo de proposito dentro da janela devolve
+`gpu_busy`. Espere a janela ou baixe `HAWK_SWAP_GRACE`.
+
+Teste que prova a trava (com o Ollama quente):
+
+```bash
+curl -sS http://127.0.0.1:11435/api/chat -d '{"model":"<modelo>","messages":[{"role":"user","content":"ola"}],"stream":false}'
+curl -sS -o /dev/null -w "%{http_code}
+" http://127.0.0.1:8095/v1/chat/completions   -H "Authorization: Bearer $(sudo cat /etc/hawk/gateway.token)"   -d '{"model":"gemma4ab","messages":[{"role":"user","content":"titulo"}]}'
+```
+
+O segundo comando tem de responder `503` e o Ollama continuar `active`. Depois
+da janela, o mesmo pedido troca normalmente (~7 s).
+
+Backups deixados na maquina: `/opt/hawk/hawk_swap_proxy.py.bak-2026-08-18-gracia`
+e `/var/lib/docker/volumes/open-webui/_data/webui.db.bak-2026-08-18-tarefas`.
+
 ### Backend em `failed` depois de uma troca e normal
 
 `systemctl status` mostrando `failed` com `status=137/n/a` logo apos um swap

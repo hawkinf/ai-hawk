@@ -758,3 +758,22 @@ python scripts/mock_provider.py     # sobe na porta 11434 (mesma do Ollama)
 
 Ele fala o dialeto OpenAI, faz streaming e responde com um eco. Serve para
 depurar rotas, interface e clientes sem tocar em nenhum provedor real.
+
+### Ollama sempre na ultima versao (desde 2026-10-06)
+
+Modelos novos (qwen3.8, muse-glimmer, nemotron-3.5-lightning, embeddinggemma-2) davam
+`pull model manifest: 412 ... requires a newer version of Ollama` no 0.32.3. Agora o
+Ollama se atualiza sozinho:
+
+- script: `/usr/local/sbin/hawk-update-ollama.sh` (copia versionada em `scripts/hawk-update-ollama.sh`);
+- timer: `hawk-ollama-update.timer`, todo dia ~04:30 (`systemctl list-timers hawk-ollama-update.timer`);
+- log: `/var/log/hawk-ollama-update.log`; backups das 3 ultimas versoes em `/opt/ollama-backup/`;
+- ele baixa o `tar.zst` do GitHub, confere a versao do binario novo, faz backup, troca
+  `/usr/local/bin/ollama` e `/usr/local/lib/ollama`, reinicia, espera `/api/version`
+  responder a versao nova e **volta atras sozinho** se nao responder;
+- as configuracoes (`ollama.service.d/*.conf`) nao sao tocadas;
+- manual/forcar: `sudo /usr/local/sbin/hawk-update-ollama.sh --force`.
+
+Pegadinha: `ollama --version` mostra a versao do **servidor em execucao**, nao a do binario.
+Para ver a do binario: `OLLAMA_HOST=127.0.0.1:1 ollama --version` (linha "client version").
+
